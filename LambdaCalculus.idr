@@ -7,7 +7,14 @@ module LambdaCalculus
 -------------
 
 data TVar = TV String
-   
+ 
+Show TVar where
+  show (TV s) = s
+
+Eq TVar where
+  (==) (TV s) (TV t) = s == t
+
+  
 data LambdaType = BaseType String
                 | ArrowType LambdaType LambdaType
                 | TypeVar TVar
@@ -18,6 +25,13 @@ data Var: LambdaType -> Type where
 
 data MyConst: LambdaType -> Type where
   MkConst: String ->  (MyConst type)
+
+substituteT: TVar -> LambdaType -> LambdaType -> LambdaType
+substituteT v s (TypeVar w) = if v == w then s else TypeVar w
+substituteT v s (BaseType i) = BaseType i
+substituteT v s (ArrowType t1 t2) = ArrowType (substituteT v s t1) (substituteT v s t2)
+substituteT v s (Pi w t) = if v == w then Pi w t else Pi w (substituteT v s t)
+
 
 data LambdaExpression: LambdaType -> Type where
   LambdaVar: (Var varType) -> (LambdaExpression varType)
@@ -33,13 +47,6 @@ data Substitution: LambdaType -> Type where
 ----------------------------
 -- Interface implementations
 ----------------------------
-
-Show TVar where
-  show (TV s) = s
-
-Eq TVar where
-  (==) (TV s) (TV t) = s == t
-
 Show LambdaType where
   show (BaseType s) = s
   show (ArrowType t1 t2) = (show t1) ++ " -> " ++ (show t2)
@@ -70,6 +77,8 @@ Show (LambdaExpression t) where
   show (LambdaConst c) = show c
   show (Abs{dom=x} v exp) = "λ" ++ (show v) ++ ":" ++ (show x) ++ "." ++ (show exp)
   show (App f arg) = (show f) ++ " " ++ (show arg)
+  show (TypeAbs v expr) = "Λ" ++ (show v) ++ "." ++ (show expr)
+  show (TypeApp f tp) = "(" ++ (show f) ++ ")" ++ "[" ++ (show tp) ++ "]"
 
 Show (Substitution t) where
   show (Sub what by) = "[" ++ (show what) ++ "\\" ++ (show by) ++ "]"
@@ -77,12 +86,6 @@ Show (Substitution t) where
 ------------
 -- Functions
 ------------
-
-substituteT: TVar -> LambdaType -> LambdaType -> LambdaType
-substituteT v s (TypeVar w) = if v == w then s else TypeVar w
-substituteT v s (BaseType i) = BaseType i
-substituteT v s (ArrowType t1 t2) = ArrowType (substituteT v s t1) (substituteT v s t2)
-substituteT v s (Pi w t) = if v == w then Pi w t else Pi w (substituteT v s t)
 
 freeVars: (LambdaExpression t) -> (List (Var a))
 freeVars (LambdaVar (MkVar n)) = [MkVar n]
@@ -128,8 +131,18 @@ substitute (Sub what by) (Abs (MkVar n) expr) with (what == MkVar n)
     vNew = freshVar (MkVar n) (freeVars by)
     exprNew = substitute (Sub (MkVar n) (LambdaVar vNew)) expr        
 
---betaReduce: (LambdaExpression t) -> (LambdaExpression t)
---betaReduce 
+expType: (LambdaExpression t) -> LambdaType
+expType {t} _ = t
+
+betaReduce: (LambdaExpression t) -> (LambdaExpression t)
+betaReduce (App (Abs v expr) arg) = substitute (Sub v arg) expr
+--betaReduce (TypeApp (TypeAbs v t) expr) =
+betaReduce (LambdaVar v) = LambdaVar v
+betaReduce (LambdaConst c) = LambdaConst c
+betaReduce (App f arg) = App (betaReduce f) (betaReduce arg)
+betaReduce (Abs v expr) = Abs v (betaReduce expr)
+betaReduce (TypeApp f arg) = TypeApp (betaReduce f) arg
+betaReduce (TypeAbs v expr) = TypeAbs v (betaReduce expr)
 
 -----------------------
 -- Implicit conversions
