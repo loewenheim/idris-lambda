@@ -25,7 +25,7 @@ data LambdaExpression: LambdaType -> Type where
   Abs: (Var dom) -> (LambdaExpression cod) -> (LambdaExpression (ArrowType dom cod))
   App: (LambdaExpression (ArrowType dom cod)) -> (LambdaExpression dom) -> (LambdaExpression cod)
   TypeAbs: (x: TVar) -> (LambdaExpression t) -> (LambdaExpression (Pi x t))
---  TypeApp: (LambdaExpression (Pi x t)) -> (s: LambdaType) -> (LambdaExpression (substituteT x s t))
+  TypeApp: (LambdaExpression (Pi x t)) -> (s: LambdaType) -> (LambdaExpression (substituteT x s t))
 
 data Substitution: LambdaType -> Type where
   Sub: {subType: LambdaType} -> (what: Var subType) -> (by: LambdaExpression subType) -> (Substitution subType)
@@ -78,8 +78,11 @@ Show (Substitution t) where
 -- Functions
 ------------
 
---substituteT: TVar -> LambdaType -> LambdaType -> LambdaType
---substituteT = ?todo
+substituteT: TVar -> LambdaType -> LambdaType -> LambdaType
+substituteT v s (TypeVar w) = if v == w then s else TypeVar w
+substituteT v s (BaseType i) = BaseType i
+substituteT v s (ArrowType t1 t2) = ArrowType (substituteT v s t1) (substituteT v s t2)
+substituteT v s (Pi w t) = if v == w then Pi w t else Pi w (substituteT v s t)
 
 freeVars: (LambdaExpression t) -> (List (Var a))
 freeVars (LambdaVar (MkVar n)) = [MkVar n]
