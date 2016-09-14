@@ -49,7 +49,7 @@ data Substitution: LambdaType -> Type where
 ----------------------------
 Show LambdaType where
   show (BaseType s) = s
-  show (ArrowType t1 t2) = (show t1) ++ " -> " ++ (show t2)
+  show (ArrowType t1 t2) = "(" ++ (show t1) ++ " -> " ++ (show t2) ++ ")"
   show (TypeVar s) = show s
   show (Pi v t) = "Π" ++ (show v) ++ "." ++ (show t)
 
@@ -76,7 +76,7 @@ Show (LambdaExpression t) where
   show (LambdaVar v) = show v
   show (LambdaConst c) = show c
   show (Abs{dom=x} v exp) = "λ" ++ (show v) ++ ":" ++ (show x) ++ "." ++ (show exp)
-  show (App f arg) = (show f) ++ " " ++ (show arg)
+  show (App f arg) = "(" ++ (show f) ++ " " ++ (show arg) ++ ")"
   show (TypeAbs v expr) = "Λ" ++ (show v) ++ "." ++ (show expr)
   show (TypeApp f tp) = "(" ++ (show f) ++ ")" ++ "[" ++ (show tp) ++ "]"
 
@@ -134,9 +134,27 @@ substitute (Sub what by) (Abs (MkVar n) expr) with (what == MkVar n)
 expType: (LambdaExpression t) -> LambdaType
 expType {t} _ = t
 
+instantiateTypeVarInVar: (x: TVar) -> (t: LambdaType) -> (LambdaCalculus.Var a) -> (LambdaCalculus.Var (substituteT x t a))
+instantiateTypeVarInVar {a} x t (MkVar n) = if a == (TypeVar x)
+                                               then MkVar n
+                                               else MkVar n
+
+instantiateTypeVarInConst: (x: TVar) -> (t: LambdaType) -> (LambdaCalculus.MyConst a) -> (LambdaCalculus.MyConst (substituteT x t a))
+instantiateTypeVarInConst {a} x t (MkConst n) = if a == (TypeVar x)
+                                               then MkConst n
+                                               else MkConst n
+
+
+instantiateTypeVar: (x: TVar) -> (t: LambdaType) -> (LambdaExpression s) -> LambdaExpression (substituteT x t s) 
+instantiateTypeVar v tp (LambdaVar $ w) = LambdaVar $ instantiateTypeVarInVar v tp w
+instantiateTypeVar v tp (LambdaConst $ c) = LambdaConst $ instantiateTypeVarInConst v tp c
+instantiateTypeVar v tp (App f arg) = App (instantiateTypeVar v tp f) (instantiateTypeVar v tp arg)
+instantiateTypeVar v tp (Abs w expr) = Abs (instantiateTypeVarInVar v tp w) (instantiateTypeVar v tp expr)
+--instantiateTypeVar v tp (TypeApp f tp') = TypeApp (instantiateTypeVar v tp f) (substituteT v tp tp')
+
 betaReduce: (LambdaExpression t) -> (LambdaExpression t)
 betaReduce (App (Abs v expr) arg) = substitute (Sub v arg) expr
---betaReduce (TypeApp (TypeAbs v t) expr) =
+betaReduce (TypeApp (TypeAbs v expr) t) = instantiateTypeVar v t expr
 betaReduce (LambdaVar v) = LambdaVar v
 betaReduce (LambdaConst c) = LambdaConst c
 betaReduce (App f arg) = App (betaReduce f) (betaReduce arg)
@@ -148,11 +166,14 @@ betaReduce (TypeAbs v expr) = TypeAbs v (betaReduce expr)
 -- Implicit conversions
 -----------------------
 
+public export
 implicit lambdaVar: (Var t) -> (LambdaExpression t)
 lambdaVar = LambdaVar
 
+public export
 implicit lambdaConst: (MyConst t) -> (LambdaExpression t)
 lambdaConst = LambdaConst
 
+public export
 implicit typeVar: TVar -> LambdaType
 typeVar = TypeVar
